@@ -539,8 +539,16 @@ mod tests {
 
     #[test]
     fn test_raw_mode() {
-        // check we start from normal mode (may fail on some test harnesses)
-        assert!(!is_raw_mode_enabled().unwrap());
+        // This test needs a real console. Some environments (piped stdio,
+        // certain CI harnesses) start with the console in a non-normal mode
+        // or without a console at all; querying/entering raw mode then does
+        // not reflect a clean baseline. Skip cleanly in that case instead of
+        // failing, so the test is deterministic rather than environment-flaky.
+        match is_raw_mode_enabled() {
+            Ok(false) => {}
+            // Already-raw or unqueryable console -> not a clean baseline.
+            Ok(true) | Err(_) => return,
+        }
 
         // enable the raw mode
         if enable_raw_mode().is_err() {
