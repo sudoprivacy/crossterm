@@ -99,6 +99,11 @@ use crate::{csi, impl_display};
 pub(crate) mod sys;
 
 #[cfg(feature = "events")]
+mod colors;
+#[cfg(feature = "events")]
+pub use colors::{DefaultColors, default_colors};
+
+#[cfg(feature = "events")]
 pub use sys::supports_keyboard_enhancement;
 
 /// Tells whether the raw mode is enabled.

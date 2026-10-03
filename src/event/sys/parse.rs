@@ -96,6 +96,7 @@ fn parse_event_impl(
                             }
                         }
                     }
+                    b']' => parse_osc_color(buffer),
                     b'[' => match raw_mode {
                         Some(raw_mode) => parse_csi_impl(buffer, Some(raw_mode)),
                         None => parse_csi(buffer),
@@ -156,6 +157,47 @@ fn parse_event_impl(
                 .map(InternalEvent::Event)
         }),
     }
+}
+
+// OSC replies share the normal event reader, so probing never consumes keys
+// through a second stdin handle. Keep split replies framed until BEL or ST.
+fn parse_osc_color(buffer: &[u8]) -> io::Result<Option<InternalEvent>> {
+    if buffer.len() > 1024 {
+        return Err(could_not_parse_event_error());
+    }
+    let payload = if buffer.ends_with(b"\x07") {
+        &buffer[2..buffer.len() - 1]
+    } else if buffer.ends_with(b"\x1b\\") {
+        &buffer[2..buffer.len() - 2]
+    } else {
+        return Ok(None);
+    };
+    let payload = std::str::from_utf8(payload).map_err(|_| could_not_parse_event_error())?;
+    let (slot, rgb) = payload
+        .split_once(';')
+        .ok_or_else(could_not_parse_event_error)?;
+    let slot = match slot {
+        "10" => 10,
+        "11" => 11,
+        _ => return Err(could_not_parse_event_error()),
+    };
+    let mut channels = rgb
+        .strip_prefix("rgb:")
+        .ok_or_else(could_not_parse_event_error)?
+        .split('/');
+    let mut channel = || -> io::Result<u8> {
+        let value = channels.next().ok_or_else(could_not_parse_event_error)?;
+        if value.is_empty() || value.len() > 4 {
+            return Err(could_not_parse_event_error());
+        }
+        let parsed = u32::from_str_radix(value, 16).map_err(|_| could_not_parse_event_error())?;
+        Ok((parsed * 255 / ((1u32 << (4 * value.len())) - 1)) as u8)
+    };
+    let rgb = (channel()?, channel()?, channel()?);
+    if channels.next().is_some() {
+        return Err(could_not_parse_event_error());
+    }
+    Ok(Some(InternalEvent::TerminalColor(slot, rgb)))
 }
 
 // converts KeyCode to KeyEvent (adds shift modifier in case of uppercase characters)
@@ -1824,14 +1866,19 @@ impl Parser {
         self.internal_events.push_back(event);
     }
 
-    /// Return the next public event, discarding parser output that has no Windows consumer.
+    /// Return public events and color replies, discarding responses with no Windows consumer.
     ///
     /// The ANSI parser also recognizes terminal responses such as cursor position reports and
     /// keyboard enhancement flags. Those are useful to Unix-side consumers, but Windows' event
     /// source cannot deliver them and must not leave them in the shared reader queue.
     #[cfg_attr(not(windows), allow(dead_code))]
     pub(crate) fn next_event(&mut self) -> Option<InternalEvent> {
-        self.find(|event| matches!(event, InternalEvent::Event(_)))
+        self.find(|event| {
+            matches!(
+                event,
+                InternalEvent::Event(_) | InternalEvent::TerminalColor(..)
+            )
+        })
     }
 
     /// Attempt to emit any buffered bytes as a complete event with `more=false`.
@@ -2090,5 +2137,68 @@ mod parser_flush_tests {
 
         assert!(p.next_event().is_none());
         assert!(p.next().is_none());
+    }
+}
+
+#[cfg(test)]
+mod color_reply_tests {
+    use super::*;
+
+    #[test]
+    fn split_replies_keep_keyboard_order_and_never_become_keys() {
+        let mut parser = Parser::default();
+        parser.advance(b"x\x1b]10;rgb:ffff/8080/0000\x1b", false);
+        assert_eq!(
+            parser.next_event(),
+            Some(InternalEvent::Event(Event::Key(KeyCode::Char('x').into())))
+        );
+        assert_eq!(parser.next_event(), None);
+        parser.advance(b"\\y\x1b]11;rgb:1/2/3\x07z", false);
+        assert_eq!(
+            parser.next_event(),
+            Some(InternalEvent::TerminalColor(10, (255, 128, 0)))
+        );
+        assert_eq!(
+            parser.next_event(),
+            Some(InternalEvent::Event(Event::Key(KeyCode::Char('y').into())))
+        );
+        assert_eq!(
+            parser.next_event(),
+            Some(InternalEvent::TerminalColor(11, (17, 34, 51)))
+        );
+        assert_eq!(
+            parser.next_event(),
+            Some(InternalEvent::Event(Event::Key(KeyCode::Char('z').into())))
+        );
+        assert_eq!(parser.next_event(), None);
+    }
+
+    #[test]
+    fn malformed_complete_reply_is_consumed_without_leaking_its_payload() {
+        let mut parser = Parser::default();
+        parser.advance(b"\x1b]11;rgb:zz/00/00\x07a", false);
+        assert_eq!(
+            parser.next_event(),
+            Some(InternalEvent::Event(Event::Key(KeyCode::Char('a').into())))
+        );
+        assert_eq!(parser.next_event(), None);
+    }
+
+    #[cfg(feature = "bracketed-paste")]
+    #[test]
+    fn adjacent_paste_and_color_replies_stay_separate() {
+        let mut parser = Parser::default();
+        parser.advance(
+            b"\x1b[200~paste\ntext\x1b[201~\x1b]11;rgb:000/fff/000\x07",
+            false,
+        );
+        assert_eq!(
+            parser.next_event(),
+            Some(InternalEvent::Event(Event::Paste("paste\ntext".into())))
+        );
+        assert_eq!(
+            parser.next_event(),
+            Some(InternalEvent::TerminalColor(11, (0, 255, 0)))
+        );
     }
 }
