@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - master
+      - feat/windows-vt-bracketed-paste
   pull_request:
     branches:
       - master
+      - feat/windows-vt-bracketed-paste
   workflow_dispatch:
 
 # Keep pull request validation read-only. Publishing belongs in a separate workflow.
