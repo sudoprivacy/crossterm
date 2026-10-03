@@ -1832,6 +1832,24 @@ impl Parser {
             }
             self.buffer.push(*byte);
 
+            // Alt+] is also the beginning of OSC. If the following bytes
+            // cannot name either queried color, replay them as ordinary keys
+            // instead of retaining every subsequent keystroke as a response.
+            if self.buffer.starts_with(b"\x1b]")
+                && ![b"\x1b]10;", b"\x1b]11;"].iter().any(|prefix| {
+                    prefix.starts_with(&self.buffer) || self.buffer.starts_with(*prefix)
+                })
+            {
+                let tail = self.buffer.split_off(2);
+                self.buffer.clear();
+                self.insert_buffered_event(InternalEvent::Event(Event::Key(KeyEvent::new(
+                    KeyCode::Char(']'),
+                    KeyModifiers::ALT,
+                ))));
+                self.advance_impl(&tail, more, raw_mode);
+                continue;
+            }
+
             let parsed = match raw_mode {
                 Some(raw_mode) => parse_event_impl(&self.buffer, more, Some(raw_mode)),
                 None => parse_event(&self.buffer, more),
@@ -2171,6 +2189,33 @@ mod color_reply_tests {
             Some(InternalEvent::Event(Event::Key(KeyCode::Char('z').into())))
         );
         assert_eq!(parser.next_event(), None);
+    }
+
+    #[test]
+    fn alt_bracket_does_not_swallow_following_keyboard_input() {
+        let mut parser = Parser::default();
+        parser.advance(b"\x1b]", false);
+        parser.advance(b"1abc", false);
+        assert_eq!(
+            parser.next_event(),
+            Some(InternalEvent::Event(Event::Key(KeyEvent::new(
+                KeyCode::Char(']'),
+                KeyModifiers::ALT
+            ))))
+        );
+        for ch in "1abc".chars() {
+            assert_eq!(
+                parser.next_event(),
+                Some(InternalEvent::Event(Event::Key(KeyCode::Char(ch).into())))
+            );
+        }
+        assert_eq!(parser.next_event(), None);
+        parser.advance(b"\x1b]", false);
+        parser.advance(b"11;rgb:0/0/0\x07", false);
+        assert_eq!(
+            parser.next_event(),
+            Some(InternalEvent::TerminalColor(11, (0, 0, 0)))
+        );
     }
 
     #[test]
