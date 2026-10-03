@@ -139,6 +139,10 @@ jobs:
       - name: Run tests
         run: cargo test --locked --all-targets --all-features -- --test-threads 1
 
+      # all-features selects use-dev-tty, bypassing the default Mio reader on Unix.
+      - name: Test the default async event reader
+        run: cargo test --locked --lib --features event-stream -- --test-threads 1
+
   doctest:
     name: doctest
     runs-on: ubuntu-24.04
