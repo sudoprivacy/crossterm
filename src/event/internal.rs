@@ -74,4 +74,6 @@ pub(crate) enum InternalEvent {
     KeyboardEnhancementFlags(KeyboardEnhancementFlags),
     /// Attributes and architectural class of the terminal.
     PrimaryDeviceAttributes,
+    /// A default foreground/background response to OSC 10/11.
+    TerminalColor(u8, (u8, u8, u8)),
 }
