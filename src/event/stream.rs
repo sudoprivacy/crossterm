@@ -22,6 +22,9 @@ use crate::event::{
 
 /// A stream of `Result<Event>`.
 ///
+/// Dropping the stream stops and joins its background input worker before
+/// returning, so another reader can safely take over terminal input.
+///
 /// **This type is not available by default. You have to use the `event-stream` feature flag
 /// to make it available.**
 ///
@@ -36,35 +39,24 @@ pub struct EventStream {
     poll_internal_waker: Waker,
     stream_wake_task_executed: Arc<AtomicBool>,
     stream_wake_task_should_shutdown: Arc<AtomicBool>,
-    task_sender: SyncSender<Task>,
+    task_sender: Option<SyncSender<Task>>,
+    worker: Option<thread::JoinHandle<()>>,
 }
 
 impl Default for EventStream {
     fn default() -> Self {
         let (task_sender, receiver) = mpsc::sync_channel::<Task>(1);
 
-        thread::spawn(move || {
-            while let Ok(task) = receiver.recv() {
-                loop {
-                    if let Ok(true) = internal::poll(None, &EventFilter) {
-                        break;
-                    }
-
-                    if task.stream_wake_task_should_shutdown.load(Ordering::SeqCst) {
-                        break;
-                    }
-                }
-                task.stream_wake_task_executed
-                    .store(false, Ordering::SeqCst);
-                task.stream_waker.wake();
-            }
+        let worker = thread::spawn(move || {
+            run_worker(receiver, || internal::poll(None, &EventFilter));
         });
 
         EventStream {
             poll_internal_waker: internal::lock_event_reader().waker(),
             stream_wake_task_executed: Arc::new(AtomicBool::new(false)),
             stream_wake_task_should_shutdown: Arc::new(AtomicBool::new(false)),
-            task_sender,
+            task_sender: Some(task_sender),
+            worker: Some(worker),
         }
     }
 }
@@ -80,6 +72,21 @@ struct Task {
     stream_waker: std::task::Waker,
     stream_wake_task_executed: Arc<AtomicBool>,
     stream_wake_task_should_shutdown: Arc<AtomicBool>,
+}
+
+fn run_worker(receiver: mpsc::Receiver<Task>, mut poll: impl FnMut() -> io::Result<bool>) {
+    while let Ok(task) = receiver.recv() {
+        // A task can still be queued when Drop wakes the worker. Check before
+        // entering a blocking poll, not just after it returns.
+        while !task.stream_wake_task_should_shutdown.load(Ordering::SeqCst) {
+            if let Ok(true) = poll() {
+                break;
+            }
+        }
+        task.stream_wake_task_executed
+            .store(false, Ordering::SeqCst);
+        task.stream_waker.wake();
+    }
 }
 
 // Note to future me
@@ -126,11 +133,15 @@ impl Stream for EventStream {
 
                     stream_wake_task_should_shutdown.store(false, Ordering::SeqCst);
 
-                    let _ = self.task_sender.send(Task {
-                        stream_waker,
-                        stream_wake_task_executed,
-                        stream_wake_task_should_shutdown,
-                    });
+                    let _ = self
+                        .task_sender
+                        .as_ref()
+                        .expect("stream is alive")
+                        .send(Task {
+                            stream_waker,
+                            stream_wake_task_executed,
+                            stream_wake_task_should_shutdown,
+                        });
                 }
                 Poll::Pending
             }
@@ -143,6 +154,34 @@ impl Drop for EventStream {
     fn drop(&mut self) {
         self.stream_wake_task_should_shutdown
             .store(true, Ordering::SeqCst);
+        // Close the task channel before joining, including when the worker
+        // has not started a queued poll yet. No input reader may outlive the
+        // stream: callers can hand stdin to another program after this returns.
+        drop(self.task_sender.take());
         let _ = self.poll_internal_waker.wake();
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cancelled_queued_task_does_not_start_another_input_poll() {
+        let (sender, receiver) = mpsc::sync_channel(1);
+        let executed = Arc::new(AtomicBool::new(true));
+        sender
+            .send(Task {
+                stream_waker: futures::task::noop_waker(),
+                stream_wake_task_executed: executed.clone(),
+                stream_wake_task_should_shutdown: Arc::new(AtomicBool::new(true)),
+            })
+            .unwrap();
+        drop(sender);
+        run_worker(receiver, || panic!("cancelled task must not read stdin"));
+        assert!(!executed.load(Ordering::SeqCst));
     }
 }
