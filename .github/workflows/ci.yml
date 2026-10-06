@@ -143,6 +143,12 @@ jobs:
       - name: Test the default async event reader
         run: cargo test --locked --lib --features event-stream -- --test-threads 1
 
+      - name: Query the cursor after async input handoff through a real PTY
+        if: runner.os != 'Windows'
+        run: |
+          cargo build --locked --example cursor-after-stream --features event-stream
+          python3 tests/cursor_after_stream_pty.py target/debug/examples/cursor-after-stream
+
   doctest:
     name: doctest
     runs-on: ubuntu-24.04

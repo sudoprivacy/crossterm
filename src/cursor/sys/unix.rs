@@ -1,6 +1,6 @@
 use std::{
     io::{self, Error, Write},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use crate::{
@@ -45,8 +45,15 @@ fn read_position_raw() -> io::Result<(u16, u16)> {
     stdout.write_all(b"\x1B[6n")?;
     stdout.flush()?;
 
+    let deadline = Instant::now() + Duration::from_millis(2000);
     loop {
-        match internal::poll(Some(Duration::from_millis(2000)), &CursorPositionFilter) {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(Error::other(
+                "The cursor position could not be read within a normal duration",
+            ));
+        }
+        match internal::poll(Some(remaining), &CursorPositionFilter) {
             Ok(true) => {
                 if let Ok(InternalEvent::CursorPosition(x, y)) =
                     internal::read(&CursorPositionFilter)
@@ -54,12 +61,10 @@ fn read_position_raw() -> io::Result<(u16, u16)> {
                     return Ok((x, y));
                 }
             }
-            Ok(false) => {
-                return Err(Error::other(
-                    "The cursor position could not be read within a normal duration",
-                ));
-            }
-            Err(_) => {}
+            // Dropping EventStream wakes the shared reader. That wakeup may
+            // arrive in this poll; it does not mean the DSR deadline expired.
+            Ok(false) => {}
+            Err(error) => return Err(error),
         }
     }
 }
