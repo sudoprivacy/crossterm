@@ -95,6 +95,10 @@ name = "cursor-after-stream"
 required-features = ["event-stream"]
 
 [[example]]
+name = "colors-after-stream"
+required-features = ["event-stream"]
+
+[[example]]
 name = "event-read"
 required-features = ["bracketed-paste", "events"]
 
