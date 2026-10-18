@@ -57,7 +57,9 @@ pub fn default_colors(timeout: Duration) -> io::Result<Option<DefaultColors>> {
     let mut background = None;
     while let Some(remaining) = deadline.checked_duration_since(Instant::now()) {
         if !reader.poll(Some(remaining), &ColorFilter)? {
-            break;
+            // An input-reader shutdown may wake poll before the query expires.
+            // Keep the original shared deadline, as cursor queries already do.
+            continue;
         }
         match reader.try_read(&ColorFilter) {
             Some(InternalEvent::TerminalColor(10, rgb)) => foreground = Some(rgb),

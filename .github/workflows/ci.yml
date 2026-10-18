@@ -149,6 +149,12 @@ jobs:
           cargo build --locked --example cursor-after-stream --features event-stream
           python3 tests/cursor_after_stream_pty.py target/debug/examples/cursor-after-stream
 
+      - name: Query the palette across async input handoff through a real PTY
+        if: runner.os != 'Windows'
+        run: |
+          cargo build --locked --example colors-after-stream --features event-stream
+          python3 tests/colors_after_stream_pty.py target/debug/examples/colors-after-stream
+
   doctest:
     name: doctest
     runs-on: ubuntu-24.04
