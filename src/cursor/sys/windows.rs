@@ -44,6 +44,12 @@ pub fn position() -> io::Result<(u16, u16)> {
     Ok(position.into())
 }
 
+/// Returns the cursor position (column, row). The console reports it
+/// directly, so no reply is awaited and `timeout` is never reached.
+pub fn position_within(_timeout: std::time::Duration) -> io::Result<Option<(u16, u16)>> {
+    position().map(Some)
+}
+
 pub(crate) fn show_cursor(show_cursor: bool) -> std::io::Result<()> {
     ScreenBufferCursor::from(Handle::current_out_handle()?).set_visibility(show_cursor)
 }

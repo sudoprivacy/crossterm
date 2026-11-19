@@ -149,6 +149,12 @@ jobs:
           cargo build --locked --example cursor-after-stream --features event-stream
           python3 tests/cursor_after_stream_pty.py target/debug/examples/cursor-after-stream
 
+      - name: Bound an unanswered cursor query through a real PTY
+        if: runner.os != 'Windows'
+        run: |
+          cargo build --locked --example cursor-position-within
+          python3 tests/cursor_position_within_pty.py target/debug/examples/cursor-position-within
+
       - name: Query the palette across async input handoff through a real PTY
         if: runner.os != 'Windows'
         run: |

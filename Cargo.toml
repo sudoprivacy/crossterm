@@ -135,5 +135,9 @@ name = "copy-to-clipboard"
 required-features = ["osc52"]
 
 [[example]]
+name = "cursor-position-within"
+required-features = ["events"]
+
+[[example]]
 name = "windows-vt-input"
 required-features = ["bracketed-paste", "events", "windows"]

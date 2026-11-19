@@ -49,7 +49,7 @@ use crate::{Command, csi, impl_display};
 pub(crate) mod sys;
 
 #[cfg(feature = "events")]
-pub use sys::position;
+pub use sys::{position, position_within};
 
 /// A command that moves the terminal cursor to the given position (column, row).
 ///
