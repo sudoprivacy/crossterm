@@ -33,7 +33,7 @@
 //!
 //! ### Supported Commands
 //!
-//! - Module [`cursor`](cursor/index.html)
+//! - Module [`cursor`]
 //!   - Visibility - [`Show`](cursor/struct.Show.html), [`Hide`](cursor/struct.Hide.html)
 //!   - Appearance - [`EnableBlinking`](cursor/struct.EnableBlinking.html),
 //!     [`DisableBlinking`](cursor/struct.DisableBlinking.html),
@@ -44,13 +44,13 @@
 //!     [`MoveLeft`](cursor/struct.MoveLeft.html), [`MoveRight`](cursor/struct.MoveRight.html),
 //!     [`MoveTo`](cursor/struct.MoveTo.html), [`MoveToColumn`](cursor/struct.MoveToColumn.html),[`MoveToRow`](cursor/struct.MoveToRow.html),
 //!     [`MoveToNextLine`](cursor/struct.MoveToNextLine.html), [`MoveToPreviousLine`](cursor/struct.MoveToPreviousLine.html)
-//! - Module [`event`](event/index.html)
+//! - Module [`event`]
 //!   - Keyboard events -
 //!     [`PushKeyboardEnhancementFlags`](event/struct.PushKeyboardEnhancementFlags.html),
 //!     [`PopKeyboardEnhancementFlags`](event/struct.PopKeyboardEnhancementFlags.html)
 //!   - Mouse events - [`EnableMouseCapture`](event/struct.EnableMouseCapture.html),
 //!     [`DisableMouseCapture`](event/struct.DisableMouseCapture.html)
-//! - Module [`style`](style/index.html)
+//! - Module [`style`]
 //!   - Colors - [`SetForegroundColor`](style/struct.SetForegroundColor.html),
 //!     [`SetBackgroundColor`](style/struct.SetBackgroundColor.html),
 //!     [`ResetColor`](style/struct.ResetColor.html), [`SetColors`](style/struct.SetColors.html)
@@ -58,7 +58,7 @@
 //!     [`PrintStyledContent`](style/struct.PrintStyledContent.html)
 //!   - Hyperlinks - [`StartHyperlink`](style/struct.StartHyperlink.html),
 //!     [`EndHyperlink`](style/struct.EndHyperlink.html)
-//! - Module [`terminal`](terminal/index.html)
+//! - Module [`terminal`]
 //!   - Scrolling - [`ScrollUp`](terminal/struct.ScrollUp.html),
 //!     [`ScrollDown`](terminal/struct.ScrollDown.html)
 //!   - Miscellaneous - [`Clear`](terminal/struct.Clear.html),
@@ -68,7 +68,7 @@
 //!     [`EnableLineWrap`](terminal/struct.EnableLineWrap.html)
 //!   - Alternate screen - [`EnterAlternateScreen`](terminal/struct.EnterAlternateScreen.html),
 //!     [`LeaveAlternateScreen`](terminal/struct.LeaveAlternateScreen.html)
-//! - Module [`clipboard`](clipboard/index.html) (requires
+//! - Module [`clipboard`] (requires
 //!   [`feature = "osc52"`](#optional-features))
 //!   - Clipboard - [`CopyToClipboard`](clipboard/struct.CopyToClipboard.html)
 //!
